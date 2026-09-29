@@ -84,7 +84,7 @@ while true; do
                 echo "    guest ok = yes" >> $SMB_CONF
                 echo "    read only = no" >> $SMB_CONF
 
-                echo "=> THÀNH CÔNG! Đã lưu nháp cấu hình. Vui lòng chạy Chức năng 7 để áp dụng."
+                echo "=> THÀNH CÔNG! Vui lòng chạy Chức năng 7 để áp dụng."
             fi
             ;;
         3)
@@ -186,43 +186,65 @@ while true; do
                 fi
             fi
             ;;
-        9)
+
+
+	9)
             echo "=================================================="
-            echo "   XÓA BỎ THƯ MỤC CHIA SẺ (XÓA SHARE)"
+            echo "             XÓA THƯ MỤC CHIA SẺ SAMBA"
             echo "=================================================="
             echo "-> Danh sách các Share hiện có:"
             grep -E "^\[.*\]" $SMB_CONF | grep -v '\[global\]'
             echo "--------------------------------------------------"
             read -p "Nhập chính xác tên Share muốn xóa (không kèm dấu []): " del_name
-            
+            del_name=$(echo "$del_name" | tr -d '[] ')
+
             if [ -z "$del_name" ]; then
                 echo "=> Thao tác bị hủy do không nhập tên."
             elif ! grep -q "^\[$del_name\]" $SMB_CONF; then
                 echo "=> LỖI: Không tìm thấy thư mục [$del_name] trong file cấu hình!"
             else
-                # Dùng awk để xóa nguyên block cấu hình an toàn
+                # 1. Trích xuất đường dẫn vật lý (path) của share trước khi xóa cấu hình
+                share_real_path=$(awk -v target="[$del_name]" '
+                    $0 == target { in_block=1; next }
+                    in_block && /^\[/ { in_block=0 }
+                    in_block && /^[[:space:]]*path[[:space:]]*=/ {
+                        split($0, arr, "=");
+                        gsub(/^[[:space:]]+|[[:space:]]+$/, "", arr[2]);
+                        print arr[2];
+                        exit;
+                    }
+                ' $SMB_CONF)
+
+                # Dự phòng: nếu không tìm thấy path trong file thì gán theo thư mục mặc định
+                [ -z "$share_real_path" ] && share_real_path="/samba_share/$del_name"
+
+                # 2. Dùng awk để xóa nguyên block cấu hình an toàn
                 awk -v target="[$del_name]" '
                     $0 == target { skip=1; next }
                     skip && /^\[/ { skip=0 }
                     !skip { print }
                 ' $SMB_CONF > $SMB_CONF.tmp && mv -f $SMB_CONF.tmp $SMB_CONF
-                
-                echo "=> Đã gỡ bỏ cấu hình của thư mục [$del_name]."
-                
-                read -p "Bạn có muốn xóa luôn thư mục dữ liệu trên ổ cứng không? (y/n): " del_f
-                if [[ "$del_f" == "y" || "$del_f" == "Y" ]]; then
-                    read -p "Nhập đường dẫn tuyệt đối cần xóa (VD: /samba_share/Data): " f_del
-                    if [ -d "$f_del" ]; then
-                        rm -rf "$f_del"
-                        echo "=> Đã dọn dẹp sạch sẽ thư mục vật lý tại $f_del."
+
+                echo "=> Đã gỡ bỏ cấu hình của thư mục [$del_name] trong smb.conf."
+
+                # 3. Hỏi xóa thư mục vật lý và thực hiện lệnh rm -rf
+                read -p "Bạn có muốn xóa luôn thư mục dữ liệu trên ổ cứng ($share_real_path) không? (y/N): " del_f
+                if [[ "$del_f" =~ ^[yY]$ ]]; then
+                    if [ -d "$share_real_path" ]; then
+                        rm -rf "$share_real_path"
+                        echo "=> Đã xóa sạch thư mục dữ liệu thực tế tại: $share_real_path"
                     else
-                        echo "=> LỖI: Đường dẫn không tồn tại trên hệ thống."
+                        echo "=> Thư mục vật lý không tồn tại trên ổ đĩa."
                     fi
+                else
+                    echo "-> Giữ lại dữ liệu thực tế trên ổ cứng."
                 fi
-                echo "=> THÀNH CÔNG! Vui lòng chạy Chức năng 7 để áp dụng thay đổi."
+
+                echo "--------------------------------------------------"
+                echo "=> THÀNH CÔNG! Đã hoàn tất xóa Share [$del_name]."
+                echo "=> Vui lòng chạy Chức năng 7 để nạp lại dịch vụ Samba."
             fi
             ;;
-
 	10)
             while true; do
                 clear
@@ -302,11 +324,14 @@ while true; do
                             if [ -z "$w_users" ] && [ -z "$r_users" ]; then
                                 echo "=> CẢNH BÁO: Bạn chưa nhập user nào! Hủy thao tác."
                             else
-                                awk -v target="[$s_name]" \
-                                    -v w_u="$w_users" \
-                                    -v r_u="$r_users" '
-                                    { print $0 }
-                                    $0 == target {
+				awk -v target="[$s_name]" \
+                                -v w_u="$w_users" \
+                                -v r_u="$r_users" '
+                                BEGIN { in_target = 0 }
+                                /^\[.*\]/ {
+                                    if ($0 == target) {
+                                        in_target = 1
+                                        print $0
                                         print "    guest ok = no"
                                         if (w_u != "" && r_u != "") {
                                             print "    valid users = " w_u ", " r_u
@@ -318,7 +343,18 @@ while true; do
 
                                         if (w_u != "") print "    write list = " w_u
                                         if (r_u != "") print "    read list = " r_u
+                                        next
+                                    } else {
+                                        in_target = 0
                                     }
+                                }
+                                in_target {
+                                    # Lọc bỏ các dòng cấu hình quyền cũ để không bị xung đột
+                                    if ($0 ~ /^[[:space:]]*(guest ok|public|valid users|write list|read list)/) {
+                                        next
+                                    }
+                                }
+                                { print $0 }
                                 ' $SMB_CONF > $SMB_CONF.tmp && mv -f $SMB_CONF.tmp $SMB_CONF
 
                                 echo "--------------------------------------------------"
@@ -347,13 +383,13 @@ while true; do
                             echo "=> LỖI: User [$del_u] không tồn tại trong danh sách Samba!"
                         else
                             # 1. Xóa khỏi cơ sở dữ liệu Samba
-                            smbpasswd -x "$del_u" &>/dev/null
+                            smbpasswd -x "$del_u" &>/dev/null	
                             echo "=> Đã xóa [$del_u] khỏi cơ sở dữ liệu Samba."
 
                             # 2. Tùy chọn xóa tài khoản Linux
                             read -p "Bạn có muốn xóa luôn tài khoản [$del_u] khỏi hệ điều hành Linux? (y/N): " confirm_del
                             if [[ "$confirm_del" =~ ^[yY]$ ]]; then
-                                userdel "$del_u" &>/dev/null
+                                userdel -r -f "$del_u" &>/dev/null
                                 echo "=> Đã xóa [$del_u] khỏi Linux."
                             else
                                 echo "-> Giữ lại tài khoản [$del_u] trên tầng Linux."
