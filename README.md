@@ -306,9 +306,20 @@ Mục đích: Thiết lập chia sẻ một thư mục từ máy Windows và dù
    - Danh sách user được Ghi: `truongphong`
    - Danh sách user Chỉ Đọc: `nhanvien`
 4. Quay lại menu chính (chọn `0`), sau đó chọn **`7`** để khởi động lại Samba.
-5. **Kiểm thử trên Windows**:
-   - Đăng nhập bằng `nhanvien`: Xem được file nhưng không thể sửa/xóa/tạo file mới (báo lỗi Permission Denied).
-   - Đăng nhập bằng `truongphong`: Tạo, sửa, xóa file hoàn toàn bình thường.
+5. **Kiểm thử trên Windows (Quy trình chuyển đổi tài khoản)**:
+   - **Thử nghiệm với `nhanvien` (Chỉ Đọc)**:
+     - Mở `\\192.168.10.133\ThuMucNhom`, đăng nhập bằng tài khoản `nhanvien`.
+     - Xem được file bình thường nhưng không thể tạo mới, sửa hoặc xóa file (Windows báo lỗi *Destination Folder Access Denied*).
+   - **Chuyển đổi sang tài khoản `truongphong` (Quyền Ghi)**:
+     > [!IMPORTANT]
+     > **"Chìa khóa" ngắt kết nối để chuyển đổi tài khoản trên Windows:**
+     > Windows có cơ chế lưu cache phiên đăng nhập SMB trong RAM và không cho phép đổi sang tài khoản khác trên cùng một máy chủ nếu chưa ngắt phiên cũ. Để ngắt kết nối hoàn toàn và chuyển sang tài khoản mới ngay lập tức, mở **CMD (Run as administrator)** và chạy lệnh:
+     > ```cmd
+     > net stop workstation /y && net start workstation
+     > ```
+     > Câu lệnh này sẽ khởi động lại dịch vụ SMB Client (Workstation Service), xóa sạch toàn bộ token đăng nhập cũ trong nháy mắt mà không cần phải khởi động lại máy tính!
+   - Mở lại `\\192.168.10.133\ThuMucNhom`, đăng nhập bằng tài khoản `truongphong`:
+     - Tạo, sửa, xóa file hoàn toàn bình thường (Phân quyền Ghi thành công).
 
 ---
 
@@ -382,14 +393,18 @@ Khi gặp sự cố (ví dụ xóa nhầm share hoặc cấu hình sai quyền t
   - Điều hướng tới: `Computer Configuration` ➔ `Administrative Templates` ➔ `Network` ➔ `Lanman Workstation`.
   - Tìm chính sách **"Enable insecure guest logons"** ➔ Chuyển thành **Enabled** ➔ Bấm **OK**.
 
-### 5. Windows bị kẹt phiên đăng nhập cũ (Lỗi không đổi được User hoặc không hiện bảng mật khẩu)
-- **Nguyên nhân**: Windows lưu cache thông tin đăng nhập SMB trong phiên làm việc.
-- **Khắc phục**:
-  - Mở Command Prompt (CMD) trên Windows và chạy lệnh xóa sạch kết nối mạng đang nhớ:
+### 5. Windows bị kẹt phiên đăng nhập cũ (Lỗi "Multiple connections..." hoặc không đổi được User)
+- **Nguyên nhân**: Windows lưu cache thông tin đăng nhập SMB trong phiên làm việc của dịch vụ `Workstation`.
+- **Khắc phục ("Chìa khóa" ngắt phiên triệt để)**:
+  - Mở **Command Prompt (CMD)** bằng quyền quản trị (**Run as administrator**) trên Windows và chạy lệnh:
+    ```cmd
+    net stop workstation /y && net start workstation
+    ```
+  - *(Tùy chọn bổ sung nếu có ổ đĩa ánh xạ)*:
     ```cmd
     net use * /delete /y
     ```
-  - Sau đó truy cập lại `\\<IP_CentOS>` để Windows hỏi lại tài khoản mới.
+  - Sau đó mở lại `\\<IP_CentOS>`, Windows sẽ hiển thị lại hộp thoại yêu cầu đăng nhập tài khoản mới ngay lập tức mà không bị lỗi xung đột phiên.
 
 ---
 
