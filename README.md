@@ -23,6 +23,7 @@
    - [Bảng tổng hợp 11 chức năng chính](#bảng-tổng-hợp-11-chức-năng-chính)
    - [Menu con: Quản lý tài khoản & Phân quyền nâng cao (Chức năng 10)](#menu-con-quản-lý-tài-khoản--phân-quyền-nâng-cao-chức-năng-10)
 7. [Quy trình Backtest & Demo thực tế](#-quy-trình-backtest--demo-thực-tế)
+   - [Mẹo: Reset hệ thống về trạng thái ban đầu khi test nhiều lần](#-mẹo-reset-hệ-thống-về-trạng-thái-ban-đầu-khi-test-nhiều-lần)
    - [Bước 1: Cài đặt & Kích hoạt Samba (Chức năng 1)](#bước-1-cài-đặt--kích-hoạt-samba-chức-năng-1)
    - [Bước 2: Tạo thư mục Anonymous (Chức năng 2 & 7)](#bước-2-tạo-thư-mục-anonymous-chức-năng-2--7)
    - [Bước 3: Tạo Group, User & Thư mục bảo mật (Chức năng 3 & 7)](#bước-3-tạo-group-user--thư-mục-bảo-mật-chức-năng-3--7)
@@ -197,6 +198,35 @@ Khi chọn **`10`** tại menu chính, hệ thống sẽ mở ra giao diện qu�
 Dưới đây là kịch bản kiểm thử mẫu (dựa theo quy trình chuẩn của đề tài):
 - **IP Máy chủ CentOS 7**: `192.168.10.133`
 - **IP Máy trạm Windows**: `192.168.10.1`
+
+---
+
+### 🧹 Mẹo: Reset hệ thống về trạng thái ban đầu khi test nhiều lần
+
+Trong quá trình thực hành, kiểm thử hoặc trước khi bắt đầu buổi demo báo cáo chính thức, nếu hệ thống có nhiều dữ liệu thử nghiệm cũ (user, group, thư mục rác) và bạn muốn **đưa toàn bộ Samba Server về trạng thái sạch sẽ ban đầu (Clean State)**, hãy mở Terminal trên CentOS 7 và chạy khối lệnh:
+
+```bash
+# 1. Dừng dịch vụ Samba hiện tại
+sudo systemctl stop smb nmb
+
+# 2. Xóa sạch Database chứa danh sách tài khoản Samba cũ
+sudo rm -f /var/lib/samba/private/passdb.tdb
+sudo rm -f /var/lib/samba/private/secrets.tdb
+
+# 3. Xóa trắng file cấu hình cũ
+sudo rm -f /etc/samba/smb.conf
+
+# 4. Xóa toàn bộ các thư mục vật lý chứa dữ liệu Share trên ổ cứng
+sudo rm -rf /samba
+sudo rm -rf /samba_share
+```
+
+> [!TIP]
+> Sau khi chạy các lệnh trên để dọn dẹp sạch sẽ, bạn chỉ cần khởi chạy lại kịch bản:
+> ```bash
+> sudo ./samba_manager.sh
+> ```
+> và chọn **Chức năng 1** để hệ thống tự động tái lập môi trường mới tinh, sau đó bắt đầu thực hiện các bước demo bên dưới!
 
 ---
 
