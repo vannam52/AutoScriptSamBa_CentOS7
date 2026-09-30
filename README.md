@@ -222,12 +222,21 @@ sudo rm -rf /samba_share
 ```
 >Sau khi thực hiện cái trên ấn số 1 sẽ báo lỗi do đã xóa cái dữ liệu gốc nên cần bổ sung những dòng này
 >sudo bash -c 'cat <<EOF > /etc/samba/smb.conf
-[global]
-    workgroup = WORKGROUP
-    server string = Samba Server
-    security = user
-    map to guest = bad user
-EOF'
+>[global]
+>    workgroup = WORKGROUP
+>    server string = Samba Server
+>    security = user
+>    map to guest = bad user
+>EOF'
+>và cái này
+>[homes]
+>    comment = Home Directories
+>    valid users = %S
+>    browseable = no
+>    writable = yes
+>EOF'
+>sudo systemctl restart smb nmb
+>
 ```
 > [!TIP]
 > Sau khi chạy các lệnh trên để dọn dẹp sạch sẽ, bạn chỉ cần khởi chạy lại kịch bản:
