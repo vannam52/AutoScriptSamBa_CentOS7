@@ -1,4 +1,4 @@
-\#!/bin/bash
+#!/bin/bash
 
 # ========================================================================
 # CHƯƠNG TRÌNH AUTO SCRIPT QUẢN LÝ DỊCH VỤ SAMBA (BẢN 11 CHỨC NĂNG)
@@ -15,14 +15,20 @@ if [ "$EUID" -ne 0 ]; then
   exit
 fi
 
-# Hàm Sao lưu cấu hình tự động
+# Hàm Sao lưu cấu hình tự động (Giữ tối đa 20 bản sao lưu gần nhất)
 function backup_config() {
     mkdir -p $BACKUP_DIR
     timestamp=$(date +%F_%T)
     backup_path="$BACKUP_DIR/smb.conf.bak_$timestamp"
     cp $SMB_CONF "$backup_path"
     echo "-> [HỆ THỐNG] Đã tự động tạo bản sao lưu cấu hình tại: $backup_path"
+
+    # Tự động dọn dẹp, chỉ giữ lại 20 bản sao lưu mới nhất
+    ls -t "$BACKUP_DIR"/smb.conf.bak_* 2>/dev/null | tail -n +21 | while read -r old_bak; do
+        [ -n "$old_bak" ] && rm -f "$old_bak"
+    done
 }
+
 
 while true; do
     clear
@@ -74,6 +80,9 @@ while true; do
                 mkdir -p /samba_share/$folder_name
                 chmod -R 777 /samba_share/$folder_name
                 chcon -Rt samba_share_t /samba_share/$folder_name 2>/dev/null
+
+                # Đảm bảo mục [global] có map to guest để Windows không bị hỏi mật khẩu
+                grep -q "map to guest" $SMB_CONF || sed -i '/\[global\]/a \    map to guest = bad user' $SMB_CONF
 
                 # Xuống dòng trước khi nối chuỗi để tránh dính dòng vào cấu hình cũ
                 echo "" >> $SMB_CONF
@@ -420,11 +429,11 @@ while true; do
             if [ ! -d "$BACKUP_DIR" ] || [ -z "$(ls -A $BACKUP_DIR 2>/dev/null)" ]; then
                 echo "=> CẢNH BÁO: Chưa có bản sao lưu nào trong hệ thống!"
             else
-                echo "-> Danh sách các bản sao lưu (Xếp theo mới nhất):"
+                echo "-> Danh sách các bản sao lưu (Tối đa 20 bản mới nhất):"
                 echo "--------------------------------------------------"
 
-                # Lấy danh sách file theo thứ tự mới nhất nằm trên cùng
-                backups=($(ls -t "$BACKUP_DIR"/smb.conf.bak_* 2>/dev/null))
+                # Lấy danh sách file theo thứ tự mới nhất nằm trên cùng (tối đa 20 bản)
+                backups=($(ls -t "$BACKUP_DIR"/smb.conf.bak_* 2>/dev/null | head -n 20))
 
                 if [ ${#backups[@]} -eq 0 ]; then
                     echo "=> Không tìm thấy file sao lưu hợp lệ dạng smb.conf.bak_*!"
