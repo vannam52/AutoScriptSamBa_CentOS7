@@ -28,10 +28,10 @@
    - [Bước 2: Tạo thư mục Anonymous (Chức năng 2 & 7)](#bước-2-tạo-thư-mục-anonymous-chức-năng-2--7)
    - [Bước 3: Tạo Group, User & Thư mục bảo mật (Chức năng 3 & 7)](#bước-3-tạo-group-user--thư-mục-bảo-mật-chức-năng-3--7)
    - [Bước 4: Kiểm tra truy cập từ máy Windows Client](#bước-4-kiểm-tra-truy-cập-từ-máy-windows-client)
-   - [Bước 5: Windows chia sẻ ngược lại cho Linux (Chức năng 8)](#bước-5-windows-chia-sẻ-ngược-lại-cho-linux-chức-năng-8)
+   - [Bước 5: Kết nối và tải File/Thư mục từ Windows về Linux (Chức năng 8)](#bước-5-kết-nối-và-tải-filethư-mục-từ-windows-về-linux-chức-năng-8)
    - [Bước 6: Phân quyền Đọc/Ghi nâng cao (Chức năng 10)](#bước-6-phân-quyền-đọcghi-nâng-cao-chức-năng-10)
    - [Bước 7: Kiểm tra cú pháp (Chức năng 6) & Xóa Share (Chức năng 9)](#bước-7-kiểm-tra-cú-pháp-chức-năng-6--xóa-share-chức-năng-9)
-   - [Bước 8: Khôi phục cấu hình tức thì - Rollback (Chức năng 11)](#bước-8-khôi-phục-cấu-hình-tức-thì---rollback-chức-năng-11)
+   - [Bước 8: Khôi phục cấu hình tức thì - Rollback (Chức năng 11 - Max 10 bản)](#bước-8-khôi-phục-cấu-hình-tức-thì---rollback-chức-năng-11---max-10-bản)
 8. [Xử lý sự cố thường gặp (Troubleshooting)](#-xử-lý-sự-cố-thường-gặp-troubleshooting)
 9. [Giấy phép & Bản quyền (License & Usage)](#-giấy-phép--bản-quyền-license--usage)
 
@@ -58,16 +58,21 @@ Tuy nhiên, việc cấu hình Samba trên **CentOS 7** theo cách truyền th�
   - Tách bạch rõ ràng danh sách tài khoản được phép Ghi (`write list`) và tài khoản Chỉ Đọc (`read list`).
   - Hỗ trợ tạo mới tài khoản Samba bảo mật (tự động khóa shell `/sbin/nologin`, không tạo thư mục home thừa).
   - Hỗ trợ gỡ bỏ tài khoản Samba và tùy chọn xóa sạch user trên hệ điều hành Linux.
-- ⏪ **Khôi phục cấu hình tức thì - Rollback (Mới - Chức năng 11)**:
-  - Tự động quét và liệt kê các bản sao lưu trong `/etc/samba/backups/` theo thứ tự thời gian mới nhất.
-  - Hoàn tác file `smb.conf` về trạng thái trước đó chỉ trong 1 giây nếu cấu hình mới gặp trục trặc.
+- ⏪ **Khôi phục cấu hình tức thì - Rollback (Max 10 bản - Chức năng 11)**:
+  - Tự động quét và liệt kê tối đa **10 bản sao lưu mới nhất** trong `/etc/samba/backups/` theo mốc thời gian.
+  - Tự động dọn dẹp các bản sao lưu cũ thứ 11 trở đi để chống rác ổ đĩa và tiết kiệm dung lượng.
+  - Hoàn tác file `smb.conf` về trạng thái trước đó chỉ trong 1 giây (mặc định phím `Enter` là chọn bản mới nhất).
+- 📥 **Tải File/Thư mục có chọn lọc kèm Dung lượng (Nâng cấp - Chức năng 8)**:
+  - Kết nối CIFS tới Windows, tự động quét và hiển thị toàn bộ danh sách tệp tin/thư mục kèm **dung lượng thực tế**.
+  - Cho phép người dùng **lựa chọn số thứ tự file/folder** muốn tải về thay vì tải toàn bộ.
+  - Hỗ trợ **tùy biến đường dẫn lưu trữ trên Linux** (mặc định `/root/Downloads`) và tự động ngắt kết nối an toàn sau khi copy xong.
 - 🛡️ **Bẫy lỗi Input & Chống dính dòng (Mới)**:
   - Tự động bẫy lỗi khi người dùng nhập khoảng trắng hoặc để trống tên thư mục/IP.
   - Tự động chèn dòng ngắt trước mỗi khối cấu hình mới, triệt tiêu hoàn toàn lỗi dính dòng trong `smb.conf`.
-- 💾 **Cơ chế Sao lưu tự động (Auto Backup)**: Tự động tạo bản backup `smb.conf.bak_<timestamp>` trước mọi thao tác ghi hoặc xóa cấu hình.
+- 💾 **Cơ chế Sao lưu tự động (Auto Backup)**: Tự động tạo bản backup `smb.conf.bak_<timestamp>` trước mọi thao tác ghi hoặc xóa cấu hình (giới hạn 10 bản gần nhất).
 - 🔍 **Kiểm tra cú pháp Testparm (Chức năng 6)**: Rà soát tính hợp lệ của toàn bộ file cấu hình trước khi khởi động lại dịch vụ.
-- 🗑️ **Xóa bỏ Share an toàn & Dọn file (Chức năng 9)**: Ứng dụng `awk` bóc tách và xóa sạch block cấu hình của share cần gỡ, kèm tùy chọn dọn dẹp thư mục vật lý trên ổ đĩa.
-- 🔄 **Chia sẻ hai chiều (2-Way Sharing - Chức năng 8)**: Hỗ trợ kết nối và **mount CIFS** để lấy dữ liệu từ thư mục chia sẻ trên Windows về Linux.
+- 🗑️ **Xóa bỏ Share an toàn & Dọn file (Chức năng 9)**: Tự động phát hiện đường dẫn thực tế từ file cấu hình bằng `awk`, xóa sạch block cấu hình của share và dọn dẹp thư mục vật lý.
+- 🔄 **Chia sẻ hai chiều (2-Way Sharing)**: Hỗ trợ kết nối và mount CIFS để trao đổi dữ liệu mượt mà giữa Windows và Linux.
 
 ---
 
@@ -131,10 +136,10 @@ Giao diện menu quản trị 11 chức năng xuất hiện như sau:
   5. Giám sát các máy Client đang kết nối (smbstatus)
   6. Kiểm tra lỗi cú pháp cấu hình (Testparm)
   7. Lưu cấu hình (Backup) & Khởi động lại dịch vụ (Apply)
-  8. Tự động kết nối và nhận file từ máy Client (Windows)
+  8. Kết nối và tải File/Thư mục từ máy Client (Windows)
   9. Xóa bỏ Thư mục chia sẻ (Gỡ cấu hình & Dọn file)
  10. Quản lý tài khoản và Phân quyền truy cập Samba
- 11. Khôi phục cấu hình từ bản sao lưu (Rollback)
+ 11. Khôi phục cấu hình từ bản sao lưu (Rollback - Max 10 bản)
   0. Thoát chương trình
 ========================================================================
 Vui lòng chọn chức năng (0-11): 
@@ -155,10 +160,10 @@ Vui lòng chọn chức năng (0-11):
 | **`5`** | **Giám sát kết nối Client** | Chạy lệnh `smbstatus` theo dõi các phiên kết nối thời gian thực: địa chỉ IP máy Client, User đang truy cập, và danh sách các tệp tin đang mở/khóa (locked files). |
 | **`6`** | **Kiểm tra lỗi cú pháp (Testparm)** | Gọi `testparm -s` kiểm tra toàn diện tính hợp lệ của file cấu hình `smb.conf`, phát hiện sớm các lỗi sai cú pháp. |
 | **`7`** | **Lưu cấu hình & Khởi động lại dịch vụ** | Tự động tạo bản backup `smb.conf.bak_<timestamp>` vào `/etc/samba/backups/`, sau đó chạy `systemctl restart smb nmb` để áp dụng mọi thay đổi vào hệ thống. |
-| **`8`** | **Nhận file từ Windows về Linux** | Bẫy lỗi IP/tên share rỗng. Tạo điểm gắn kết `/mnt/WinData`, unmount phiên cũ và dùng `mount.cifs` để kết nối lấy danh sách tệp tin từ máy Windows về Linux. |
-| **`9`** | **Xóa bỏ Thư mục chia sẻ** | Liệt kê các share hiện có, dùng `awk` bóc tách xóa sạch block cấu hình của share được chọn trong `smb.conf`. Có tùy chọn hỏi xác nhận xóa luôn thư mục dữ liệu vật lý trên ổ cứng. |
+| **`8`** | **Tải File/Thư mục từ Windows** | Bẫy lỗi IP/Share rỗng. Mount CIFS, quét toàn bộ tệp/thư mục và **hiển thị kèm dung lượng thực tế**. Cho phép người dùng **chọn số thứ tự tệp muốn tải** và **chỉ định thư mục lưu trữ trên Linux** (mặc định: `/root/Downloads`), sau đó tự động unmount an toàn. |
+| **`9`** | **Xóa bỏ Thư mục chia sẻ** | Liệt kê các share, tự động trích xuất đường dẫn thực tế bằng `awk` và xóa sạch block cấu hình của share trong `smb.conf`. Có tùy chọn hỏi xác nhận xóa luôn thư mục dữ liệu vật lý trên ổ cứng. |
 | **`10`** | **Quản lý tài khoản & Phân quyền nâng cao** | Mở Menu con chuyên sâu: Tạo tài khoản Samba mới (xác nhận mật khẩu 2 lần), phân quyền Đọc/Ghi (`write list`, `read list`) cho share có sẵn, và xóa tài khoản Samba an toàn. |
-| **`11`** | **Khôi phục cấu hình (Rollback)** | Quét toàn bộ thư mục `/etc/samba/backups/`, hiển thị danh sách các mốc thời gian sao lưu và cho phép khôi phục lại cấu hình gốc bất kỳ lúc nào chỉ với 1 thao tác. |
+| **`11`** | **Khôi phục cấu hình (Rollback - Max 10)** | Quét thư mục `/etc/samba/backups/`, hiển thị tối đa **10 bản sao lưu mới nhất** (tự động xóa bản cũ thứ 11 trở đi), cho phép chọn số thứ tự để rollback tức thì (mặc định Enter là chọn bản mới nhất). |
 | **`0`** | **Thoát chương trình** | Dừng thực thi kịch bản. |
 
 ---
@@ -299,9 +304,9 @@ sudo rm -rf /samba_share
 
 ---
 
-### Bước 5: Windows chia sẻ ngược lại cho Linux (Chức năng 8)
+### Bước 5: Kết nối và tải File/Thư mục từ Windows về Linux (Chức năng 8)
 
-Mục đích: Thiết lập chia sẻ một thư mục từ máy Windows và dùng tính năng **số 8** trên CentOS 7 để tự động mount và lấy dữ liệu về.
+Mục đích: Thiết lập chia sẻ một thư mục từ máy Windows, sau đó dùng tính năng **số 8** trên CentOS 7 để duyệt danh sách tệp tin, xem dung lượng thực tế và **chọn tải file/thư mục mong muốn về thư mục đích chỉ định trên Linux**.
 
 #### 5.1. Thao tác trên máy Windows:
 1. Mở **Command Prompt (CMD)** bằng quyền quản trị (**Run as administrator**).
@@ -309,9 +314,10 @@ Mục đích: Thiết lập chia sẻ một thư mục từ máy Windows và dù
    ```cmd
    net user maykhach 123 /add
    ```
+   *(Nếu là Windows Server có yêu cầu độ phức tạp mật khẩu, đặt mật khẩu dạng `Admin@12345`)*.
 3. Tạo thư mục chia sẻ trên ổ `C:\`:
    - Tạo thư mục có tên `ShareWin` tại `C:\ShareWin`.
-   - Tạo sẵn một vài file dữ liệu thử nghiệm trong thư mục này (ví dụ: `Tailieu_BaoCao.txt`).
+   - Tạo sẵn một vài file hoặc thư mục dữ liệu thử nghiệm trong này (ví dụ: `Tailieu_BaoCao.txt`, `DuAn_Mau`).
 4. **Cấu hình chia sẻ (Sharing)**:
    - Chuột phải vào thư mục `ShareWin` ➔ Chọn **Properties**.
    - Chuyển sang tab **Sharing** ➔ Chọn **Advanced Sharing...**.
@@ -331,16 +337,25 @@ Mục đích: Thiết lập chia sẻ một thư mục từ máy Windows và dù
    - **IP máy Windows**: `192.168.10.1`
    - **Tên thư mục Share trên Windows**: `ShareWin`
    - **Tên tài khoản Windows**: `maykhach`
-   - **Mật khẩu tài khoản Windows**: `123`
-3. **Kết quả**:
-   - Kịch bản sẽ tự động mount thư mục từ Windows vào `/mnt/WinData` trên CentOS 7 và liệt kê toàn bộ danh sách tệp tin nhận được:
-
-```text
--> Đang tiến hành kết nối...
-=> THÀNH CÔNG! Đã lấy được dữ liệu từ máy Windows.
-=> Danh sách các file bạn vừa nhận được:
--rwxr-xr-x 1 root root   25 Sep 28 15:30 Tailieu_BaoCao.txt
-```
+   - **Mật khẩu tài khoản Windows**: Nhập mật khẩu đã đặt (ví dụ: `Admin@12345` hoặc `123`)
+3. **Quét dữ liệu & Lựa chọn tải về**:
+   - Hệ thống tự động mount CIFS, quét toàn bộ tệp/thư mục và hiển thị bảng danh sách kèm **dung lượng thực tế**:
+     ```text
+     -> Đang tiến hành kết nối...
+     => THÀNH CÔNG! Đã kết nối được tới máy Windows.
+     -> Đang quét danh sách dữ liệu...
+     --------------------------------------------------
+        DANH SÁCH FILE/THƯ MỤC TRÊN WINDOWS
+     --------------------------------------------------
+       1. Tailieu_BaoCao.txt (Dung lượng: 25K)
+       2. DuAn_Mau (Dung lượng: 1.2M)
+     --------------------------------------------------
+     Chọn số thứ tự để tải về (0 để Hủy): 1
+     Nhập đường dẫn lưu file trên Linux (Mặc định: /root/Downloads): /root/Downloads
+     -> Đang copy 'Tailieu_BaoCao.txt' về '/root/Downloads'...
+     => THÀNH CÔNG! Đã tải xong.
+     ```
+   - Sau khi copy hoàn tất, kịch bản tự động thực thi `umount /mnt/WinData` để ngắt kết nối an toàn.
 
 ---
 
@@ -382,21 +397,21 @@ Mục đích: Thiết lập chia sẻ một thư mục từ máy Windows và dù
 
 ---
 
-### Bước 8: Khôi phục cấu hình tức thì - Rollback (Chức năng 11)
+### Bước 8: Khôi phục cấu hình tức thì - Rollback (Chức năng 11 - Max 10 bản)
 
 Khi gặp sự cố (ví dụ xóa nhầm share hoặc cấu hình sai quyền truy cập):
 1. Tại menu chính, chọn số **`11`**.
-2. Màn hình liệt kê toàn bộ các bản sao lưu theo mốc thời gian:
+2. Màn hình tự động lọc và hiển thị danh sách tối đa **10 bản sao lưu mới nhất** (các bản cũ hơn thứ 10 đã được hệ thống tự động dọn dẹp để tiết kiệm dung lượng ổ cứng):
    ```text
    -> Danh sách các bản sao lưu (Xếp theo mới nhất):
    --------------------------------------------------
-     1. Lúc: 2026-09-28_22:15:30 [MỚI NHẤT]
-     2. Lúc: 2026-09-28_22:05:12
-     3. Lúc: 2026-09-28_21:50:04
+     1. Lúc: 2026-10-02_08:15:30 [MỚI NHẤT]
+     2. Lúc: 2026-10-02_08:05:12
+     3. Lúc: 2026-10-02_07:50:04
    --------------------------------------------------
    Chọn số thứ tự muốn khôi phục [Mặc định 1 - Mới nhất, 0 để Hủy]: 
    ```
-3. Nhấn `Enter` (chọn bản mới nhất) hoặc chọn số thứ tự bản sao lưu mong muốn.
+3. Nhấn `Enter` (mặc định chọn bản số 1 - mới nhất) hoặc chọn số thứ tự bản sao lưu mong muốn.
 4. Hệ thống khôi phục nguyên vẹn file `smb.conf`. Nhập tiếp số **`7`** để nạp lại dịch vụ là hệ thống trở lại bình thường.
 
 ---

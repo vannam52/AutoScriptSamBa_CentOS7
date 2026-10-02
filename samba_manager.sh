@@ -1,8 +1,7 @@
-\#!/bin/bash
+#!/bin/bash
 
 # ========================================================================
 # CHƯƠNG TRÌNH AUTO SCRIPT QUẢN LÝ DỊCH VỤ SAMBA (BẢN 11 CHỨC NĂNG)
-# Tích hợp: Bẫy lỗi Input, Chống dính dòng, Phân quyền Nâng cao & Rollback
 # ========================================================================
 
 # Các biến môi trường
@@ -15,13 +14,16 @@ if [ "$EUID" -ne 0 ]; then
   exit
 fi
 
-# Hàm Sao lưu cấu hình tự động
+# Hàm Sao lưu cấu hình tự động (Giới hạn 10 bản mới nhất)
 function backup_config() {
     mkdir -p $BACKUP_DIR
     timestamp=$(date +%F_%T)
     backup_path="$BACKUP_DIR/smb.conf.bak_$timestamp"
     cp $SMB_CONF "$backup_path"
     echo "-> [HỆ THỐNG] Đã tự động tạo bản sao lưu cấu hình tại: $backup_path"
+    
+    # Tự động dọn dẹp, chỉ giữ lại 10 bản sao lưu mới nhất để tránh rác máy
+    ls -t $BACKUP_DIR/smb.conf.bak_* 2>/dev/null | tail -n +11 | xargs -r rm -f
 }
 
 while true; do
@@ -36,10 +38,10 @@ while true; do
     echo "  5. Giám sát các máy Client đang kết nối (smbstatus)"
     echo "  6. Kiểm tra lỗi cú pháp cấu hình (Testparm)"
     echo "  7. Lưu cấu hình (Backup) & Khởi động lại dịch vụ (Apply)"
-    echo "  8. Tự động kết nối và nhận file từ máy Client (Windows)"
+    echo "  8. Kết nối và tải File/Thư mục từ máy Client (Windows)"
     echo "  9. Xóa bỏ Thư mục chia sẻ (Gỡ cấu hình & Dọn file)"
     echo " 10. Quản lý tài khoản và Phân quyền truy cập Samba"
-    echo " 11. Khôi phục cấu hình từ bản sao lưu (Rollback)"
+    echo " 11. Khôi phục cấu hình từ bản sao lưu (Rollback - Max 10 bản)"
     echo "  0. Thoát chương trình"
     echo "========================================================================"
     read -p "Vui lòng chọn chức năng (0-11): " choice
@@ -75,7 +77,6 @@ while true; do
                 chmod -R 777 /samba_share/$folder_name
                 chcon -Rt samba_share_t /samba_share/$folder_name 2>/dev/null
 
-                # Xuống dòng trước khi nối chuỗi để tránh dính dòng vào cấu hình cũ
                 echo "" >> $SMB_CONF
                 echo "[$folder_name]" >> $SMB_CONF
                 echo "    path = /samba_share/$folder_name" >> $SMB_CONF
@@ -100,8 +101,6 @@ while true; do
             else
                 echo "-> Đang cấu hình Group và User..."
                 groupadd $group_name 2>/dev/null
-                
-                # Nâng cấp bảo mật: Không tạo thư mục home và khóa shell nologin
                 useradd -M -s /sbin/nologin -g $group_name $user_name 2>/dev/null
                 
                 echo "Vui lòng đặt mật khẩu đăng nhập mạng cho tài khoản $user_name:"
@@ -161,7 +160,7 @@ while true; do
             ;;
         8)
             echo "=================================================="
-            echo "   KẾT NỐI VÀ NHẬN FILE TỪ WINDOWS VỀ LINUX"
+            echo "   KẾT NỐI VÀ TẢI FILE TỪ WINDOWS VỀ LINUX"
             echo "=================================================="
             read -p "Nhập IP máy Windows (VD: 192.168.10.1): " win_ip
             read -p "Nhập tên thư mục Share trên Windows (VD: ShareToLinux): " win_share
@@ -178,17 +177,57 @@ while true; do
                 mount.cifs //$win_ip/$win_share /mnt/WinData -o username=$win_user,password=$win_pass
                 
                 if [ $? -eq 0 ]; then
-                    echo "=> THÀNH CÔNG! Đã lấy được dữ liệu từ máy Windows."
-                    echo "=> Danh sách các file bạn vừa nhận được:"
-                    ls -l /mnt/WinData
+                    echo "=> THÀNH CÔNG! Đã kết nối được tới máy Windows."
+                    echo "-> Đang quét danh sách dữ liệu..."
+                    
+                    # Đọc danh sách file/thư mục vào mảng
+                    mapfile -t win_files < <(ls -A1 "/mnt/WinData/" 2>/dev/null)
+                    
+                    if [ ${#win_files[@]} -eq 0 ]; then
+                        echo "=> Thư mục Share này đang trống, không có gì để tải!"
+                    else
+                        echo "--------------------------------------------------"
+                        echo "   DANH SÁCH FILE/THƯ MỤC TRÊN WINDOWS"
+                        echo "--------------------------------------------------"
+                        for i in "${!win_files[@]}"; do
+                            filepath="/mnt/WinData/${win_files[$i]}"
+                            size=$(du -sh "$filepath" 2>/dev/null | cut -f1)
+                            echo "  $((i+1)). ${win_files[$i]} (Dung lượng: $size)"
+                        done
+                        echo "--------------------------------------------------"
+                        read -p "Chọn số thứ tự để tải về (0 để Hủy): " f_choice
+                        
+                        if [[ "$f_choice" =~ ^[0-9]+$ ]] && [ "$f_choice" -ge 1 ] && [ "$f_choice" -le "${#win_files[@]}" ]; then
+                            sel_name="${win_files[$((f_choice-1))]}"
+                            sel_path="/mnt/WinData/$sel_name"
+                            
+                            read -p "Nhập đường dẫn lưu file trên Linux (Mặc định: /root/Downloads): " dl_dir
+                            [ -z "$dl_dir" ] && dl_dir="/root/Downloads"
+                            mkdir -p "$dl_dir"
+                            
+                            echo "-> Đang copy '$sel_name' về '$dl_dir'..."
+                            cp -r "$sel_path" "$dl_dir/"
+                            
+                            if [ $? -eq 0 ]; then
+                                echo "=> THÀNH CÔNG! Đã tải xong."
+                            else
+                                echo "=> LỖI: Quá trình copy thất bại."
+                            fi
+                        elif [ "$f_choice" -eq 0 ]; then
+                            echo "=> Đã hủy thao tác tải file."
+                        else
+                            echo "=> LỖI: Lựa chọn không hợp lệ!"
+                        fi
+                    fi
+                    
+                    # Dọn dẹp ngắt kết nối
+                    umount /mnt/WinData 2>/dev/null
                 else
                     echo "=> THẤT BẠI! Vui lòng kiểm tra lại IP, Tài khoản, Mật khẩu hoặc Tường lửa trên Windows."
                 fi
             fi
             ;;
-
-
-	9)
+        9)
             echo "=================================================="
             echo "             XÓA THƯ MỤC CHIA SẺ SAMBA"
             echo "=================================================="
@@ -203,7 +242,6 @@ while true; do
             elif ! grep -q "^\[$del_name\]" $SMB_CONF; then
                 echo "=> LỖI: Không tìm thấy thư mục [$del_name] trong file cấu hình!"
             else
-                # 1. Trích xuất đường dẫn vật lý (path) của share trước khi xóa cấu hình
                 share_real_path=$(awk -v target="[$del_name]" '
                     $0 == target { in_block=1; next }
                     in_block && /^\[/ { in_block=0 }
@@ -215,10 +253,8 @@ while true; do
                     }
                 ' $SMB_CONF)
 
-                # Dự phòng: nếu không tìm thấy path trong file thì gán theo thư mục mặc định
                 [ -z "$share_real_path" ] && share_real_path="/samba_share/$del_name"
 
-                # 2. Dùng awk để xóa nguyên block cấu hình an toàn
                 awk -v target="[$del_name]" '
                     $0 == target { skip=1; next }
                     skip && /^\[/ { skip=0 }
@@ -227,7 +263,6 @@ while true; do
 
                 echo "=> Đã gỡ bỏ cấu hình của thư mục [$del_name] trong smb.conf."
 
-                # 3. Hỏi xóa thư mục vật lý và thực hiện lệnh rm -rf
                 read -p "Bạn có muốn xóa luôn thư mục dữ liệu trên ổ cứng ($share_real_path) không? (y/N): " del_f
                 if [[ "$del_f" =~ ^[yY]$ ]]; then
                     if [ -d "$share_real_path" ]; then
@@ -245,7 +280,7 @@ while true; do
                 echo "=> Vui lòng chạy Chức năng 7 để nạp lại dịch vụ Samba."
             fi
             ;;
-	10)
+        10)
             while true; do
                 clear
                 echo "=================================================="
@@ -268,7 +303,6 @@ while true; do
                         if [ -z "$new_u" ]; then
                             echo "=> CẢNH BÁO: Tên tài khoản không được để trống!"
                         else
-                            # 1. Kiểm tra và tạo tài khoản Linux nếu chưa có
                             if ! id "$new_u" &>/dev/null; then
                                 useradd -M -s /sbin/nologin "$new_u"
                                 echo "-> Đã tạo tài khoản hệ thống cho [$new_u]."
@@ -276,7 +310,6 @@ while true; do
                                 echo "-> Tài khoản [$new_u] đã tồn tại trên Linux."
                             fi
 
-                            # 2. Vòng lặp nhập và xác nhận lại mật khẩu
                             while true; do
                                 read -s -p "Nhập mật khẩu Samba cho [$new_u]: " pass1
                                 echo ""
@@ -301,7 +334,6 @@ while true; do
                         echo ""
                         read -p "Nhấn phím Enter để tiếp tục..."
                         ;;
-
                     2)
                         echo "--------------------------------------------------"
                         echo "-> PHÂN QUYỀN ĐỌC/GHI CHO THƯ MỤC CÓ SẴN"
@@ -324,7 +356,7 @@ while true; do
                             if [ -z "$w_users" ] && [ -z "$r_users" ]; then
                                 echo "=> CẢNH BÁO: Bạn chưa nhập user nào! Hủy thao tác."
                             else
-				awk -v target="[$s_name]" \
+                                awk -v target="[$s_name]" \
                                 -v w_u="$w_users" \
                                 -v r_u="$r_users" '
                                 BEGIN { in_target = 0 }
@@ -349,7 +381,6 @@ while true; do
                                     }
                                 }
                                 in_target {
-                                    # Lọc bỏ các dòng cấu hình quyền cũ để không bị xung đột
                                     if ($0 ~ /^[[:space:]]*(guest ok|public|valid users|write list|read list)/) {
                                         next
                                     }
@@ -365,7 +396,6 @@ while true; do
                         echo ""
                         read -p "Nhấn phím Enter để tiếp tục..."
                         ;;
-
                     3)
                         echo "--------------------------------------------------"
                         echo "-> XÓA TÀI KHOẢN NGƯỜI DÙNG SAMBA"
@@ -382,11 +412,9 @@ while true; do
                         elif ! pdbedit -L | grep -qw "^$del_u"; then
                             echo "=> LỖI: User [$del_u] không tồn tại trong danh sách Samba!"
                         else
-                            # 1. Xóa khỏi cơ sở dữ liệu Samba
-                            smbpasswd -x "$del_u" &>/dev/null	
+                            smbpasswd -x "$del_u" &>/dev/null   
                             echo "=> Đã xóa [$del_u] khỏi cơ sở dữ liệu Samba."
 
-                            # 2. Tùy chọn xóa tài khoản Linux
                             read -p "Bạn có muốn xóa luôn tài khoản [$del_u] khỏi hệ điều hành Linux? (y/N): " confirm_del
                             if [[ "$confirm_del" =~ ^[yY]$ ]]; then
                                 userdel -r -f "$del_u" &>/dev/null
@@ -399,12 +427,10 @@ while true; do
                         echo ""
                         read -p "Nhấn phím Enter để tiếp tục..."
                         ;;
-
                     0)
                         echo "=> Đang quay lại Menu chính..."
                         break
                         ;;
-
                     *)
                         echo "=> LỖI: Lựa chọn không hợp lệ, vui lòng chọn từ 0 đến 3!"
                         sleep 1
@@ -412,7 +438,6 @@ while true; do
                 esac
             done
             ;;
-
         11)
             echo "=================================================="
             echo "   KHÔI PHỤC CẤU HÌNH TỪ BẢN SAO LƯU (ROLLBACK)"
@@ -423,15 +448,14 @@ while true; do
                 echo "-> Danh sách các bản sao lưu (Xếp theo mới nhất):"
                 echo "--------------------------------------------------"
 
-                # Lấy danh sách file theo thứ tự mới nhất nằm trên cùng
-                backups=($(ls -t "$BACKUP_DIR"/smb.conf.bak_* 2>/dev/null))
+                # Chỉ lấy tối đa 10 bản sao lưu mới nhất hiển thị ra màn hình
+                backups=($(ls -t "$BACKUP_DIR"/smb.conf.bak_* 2>/dev/null | head -n 10))
 
                 if [ ${#backups[@]} -eq 0 ]; then
                     echo "=> Không tìm thấy file sao lưu hợp lệ dạng smb.conf.bak_*!"
                 else
                     for i in "${!backups[@]}"; do
                         fname=$(basename "${backups[$i]}")
-                        # Tách lấy mốc thời gian từ tên file để hiển thị trực quan
                         time_tag=${fname#smb.conf.bak_}
                         if [ $i -eq 0 ]; then
                             echo "  $((i+1)). Lúc: $time_tag [MỚI NHẤT]"
@@ -442,7 +466,6 @@ while true; do
                     echo "--------------------------------------------------"
                     read -p "Chọn số thứ tự muốn khôi phục [Mặc định 1 - Mới nhất, 0 để Hủy]: " choice
 
-                    # Nếu nhấn Enter để trống thì mặc định chọn bản 1 (mới nhất)
                     [ -z "$choice" ] && choice=1
 
                     if [ "$choice" -eq 0 ] 2>/dev/null; then
